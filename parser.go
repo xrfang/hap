@@ -1,12 +1,15 @@
 package hap
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -17,23 +20,19 @@ type (
 		Type     string `json:"type"` //string, int, float, bool
 		Default  string `json:"default"`
 		Required bool   `json:"required"`
+		Position uint   `json:"position"`
 		Memo     string `json:"memo"`
 		defval   interface{}
 	}
 	Parser struct {
-		spec []Param
+		qdef []Param //query parameters
+		pdef []Param //positional (path) parameters
 		opts map[string]interface{}
 		args []string
 		path string
-		err  error
+		errs []error
 	}
 )
-
-func assert(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
 
 //parse query string in G-P-C order, i.e. GET (query string) has highest priority,
 //POST (body) follows, and COOKIE has lowest priority
@@ -91,77 +90,91 @@ func args(r *http.Request) (url.Values, error) {
 	return vs, nil
 }
 
-func (p *Parser) parse(r *http.Request) {
-	defer func() {
-		if e := recover(); e != nil {
-			p.err = e.(error)
-		}
-	}()
-	if sfx := r.URL.Path[len(p.path):]; len(sfx) > 0 {
-		p.args = strings.Split(sfx, "/")
+func (p *Parser) parse(vals []string, s Param) {
+	if len(vals) == 0 && s.Required {
+		p.errs = append(p.errs, fmt.Errorf("missing %q", s.Name))
+		return
 	}
-	vs, err := args(r)
-	assert(err)
-	for _, s := range p.spec {
-		v := vs[s.Name]
-		if len(v) == 0 && s.Required {
-			panic(fmt.Errorf("missing %q", s.Name))
+	switch s.Type {
+	case "string":
+		if len(vals) == 0 {
+			p.opts[s.Name] = []string{s.defval.(string)}
+		} else {
+			p.opts[s.Name] = vals
 		}
-		switch s.Type {
-		case "string":
-			if len(v) == 0 {
-				p.opts[s.Name] = []string{s.defval.(string)}
-			} else {
-				p.opts[s.Name] = v
+	case "int":
+		var is []int64
+		for _, v := range vals {
+			i, err := strconv.Atoi(v)
+			if err != nil {
+				p.errs = append(p.errs, fmt.Errorf("%q is not an integer (arg:%s)", v, s.Name))
+				return
 			}
-		case "int":
-			var is []int64
-			for _, a := range v {
-				i, err := strconv.Atoi(a)
-				if err != nil {
-					panic(fmt.Errorf("%q is not an integer (arg:%s)", a, s.Name))
-				}
-				is = append(is, int64(i))
-			}
-			if len(is) == 0 {
-				is = []int64{s.defval.(int64)}
-			}
-			p.opts[s.Name] = is
-		case "float":
-			var fs []float64
-			for _, a := range v {
-				f, err := strconv.ParseFloat(a, 64)
-				if err != nil {
-					panic(fmt.Errorf("%q is not a float (arg:%s)", a, s.Name))
-				}
-				fs = append(fs, f)
-			}
-			if len(fs) == 0 {
-				fs = []float64{s.defval.(float64)}
-			}
-			p.opts[s.Name] = fs
-		case "bool":
-			var bs []bool
-			for _, a := range v {
-				b := true
-				if a != "" {
-					b, err = strconv.ParseBool(a)
-					if err != nil {
-						panic(fmt.Errorf("%q is not a bool (arg:%s)", a, s.Name))
-					}
-				}
-				bs = append(bs, b)
-			}
-			if len(bs) == 0 {
-				bs = []bool{s.defval.(bool)}
-			}
-			p.opts[s.Name] = bs
+			is = append(is, int64(i))
 		}
+		if len(is) == 0 {
+			is = []int64{s.defval.(int64)}
+		}
+		p.opts[s.Name] = is
+	case "float":
+		var fs []float64
+		for _, v := range vals {
+			f, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				p.errs = append(p.errs, fmt.Errorf("%q is not a float (arg:%s)", v, s.Name))
+				return
+			}
+			fs = append(fs, f)
+		}
+		if len(fs) == 0 {
+			fs = []float64{s.defval.(float64)}
+		}
+		p.opts[s.Name] = fs
+	case "bool":
+		var bs []bool
+		for _, v := range vals {
+			b := true
+			var err error
+			if v != "" {
+				b, err = strconv.ParseBool(v)
+				if err != nil {
+					p.errs = append(p.errs, fmt.Errorf("%q is not a bool (arg:%s)", v, s.Name))
+					return
+				}
+			}
+			bs = append(bs, b)
+		}
+		if len(bs) == 0 {
+			bs = []bool{s.defval.(bool)}
+		}
+		p.opts[s.Name] = bs
 	}
 }
 
-func (p *Parser) Error() error {
-	return p.err
+func (p *Parser) Parse(r *http.Request) {
+	if sfx := r.URL.Path[len(p.path):]; len(sfx) > 0 {
+		p.args = strings.Split(sfx, "/")
+	}
+	for i, s := range p.pdef {
+		var arg []string
+		if i < len(p.args) {
+			arg = []string{p.args[i]}
+		}
+		p.parse(arg, s)
+	}
+	vs, err := args(r)
+	if err != nil {
+		p.errs = append(p.errs, err)
+		return
+	}
+	for _, s := range p.qdef {
+		v := vs[s.Name]
+		p.parse(v, s)
+	}
+}
+
+func (p *Parser) Errors() []error {
+	return p.errs
 }
 
 func (p *Parser) Strings(name string) ([]string, error) {
@@ -252,12 +265,66 @@ func (p *Parser) Arg(idx int) string {
 	return p.args[idx]
 }
 
-func (p *Parser) Params() []Param {
-	return p.spec
+func (p *Parser) Help() string {
+	pargs := []string{p.path}
+	var qargs []string
+	for _, s := range p.pdef {
+		var stub string
+		if s.Required {
+			stub = `<` + s.Name + `>`
+		} else {
+			stub = `[` + s.Name + `]`
+		}
+		pargs = append(pargs, stub)
+	}
+	if len(pargs) < 2 {
+		pargs = append(pargs, `[arguments]`)
+	}
+	for _, s := range p.qdef {
+		var stub string
+		if s.Required {
+			stub = `<` + s.Name + `>`
+		} else {
+			stub = `[` + s.Name + `]`
+		}
+		qargs = append(qargs, stub)
+	}
+	uri := strings.Join(pargs, "/")
+	if len(qargs) > 0 {
+		uri += `?` + strings.Join(qargs, "&")
+	}
+	var args []map[string]interface{}
+	for _, s := range append(p.pdef, p.qdef...) {
+		args = append(args, map[string]interface{}{
+			"name":     s.Name,
+			"type":     s.Type,
+			"default":  s.Default,
+			"required": s.Required,
+			"memo":     s.Memo,
+		})
+	}
+	sort.Slice(args, func(i, j int) bool {
+		return args[i]["name"].(string) < args[j]["name"].(string)
+	})
+	var bs bytes.Buffer
+	je := json.NewEncoder(&bs)
+	je.SetIndent("", "    ")
+	je.SetEscapeHTML(false)
+	je.Encode(map[string]interface{}{"uri": uri, "args": args})
+	return bs.String()
 }
 
 func NewParser(route string, spec []Param) (p *Parser, err error) {
-	for i, s := range spec {
+	var qdef, pdef []Param
+	dup := make(map[string]bool)
+	for _, s := range spec {
+		if s.Name == "" {
+			return nil, errors.New("empty arg name")
+		}
+		if dup[s.Name] {
+			return nil, fmt.Errorf("arg name %q duplicated", s.Name)
+		}
+		dup[s.Name] = true
 		t := strings.ToLower(s.Type)
 		var v interface{}
 		switch t {
@@ -293,8 +360,27 @@ func NewParser(route string, spec []Param) (p *Parser, err error) {
 		default:
 			return nil, fmt.Errorf("invalid param type %q", s.Type)
 		}
-		spec[i].Type = t
-		spec[i].defval = v
+		s.Type = t
+		s.defval = v
+		if s.Position > 0 {
+			pdef = append(pdef, s)
+		} else {
+			qdef = append(qdef, s)
+		}
 	}
-	return &Parser{spec: spec, path: route}, nil
+	var dupErr error
+	sort.Slice(pdef, func(i, j int) bool {
+		pi := pdef[i]
+		pj := pdef[j]
+		if pi.Position == pj.Position {
+			dupErr = fmt.Errorf("same position (%q, %q)", pi.Name, pj.Name)
+			return false
+		}
+		return pi.Position < pj.Position
+	})
+	if dupErr != nil {
+		return nil, dupErr
+	}
+	sort.Slice(qdef, func(i, j int) bool { return qdef[i].Name < qdef[j].Name })
+	return &Parser{pdef: pdef, qdef: qdef, path: route, opts: make(map[string]interface{})}, nil
 }
