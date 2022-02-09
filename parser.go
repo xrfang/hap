@@ -16,13 +16,12 @@ import (
 
 type (
 	Param struct {
-		Name     string `json:"name"`
-		Type     string `json:"type"` //string, int, float, bool
-		Default  string `json:"default"`
-		Required bool   `json:"required"`
-		Position uint   `json:"position"`
-		Memo     string `json:"memo"`
-		defval   interface{}
+		Name     string
+		Type     string //string, int, float, bool
+		Default  interface{}
+		Required bool
+		Position uint
+		Memo     string
 	}
 	Parser struct {
 		qdef []Param //query parameters
@@ -98,7 +97,7 @@ func (p *Parser) parse(vals []string, s Param) {
 	switch s.Type {
 	case "string":
 		if len(vals) == 0 {
-			p.opts[s.Name] = []string{s.defval.(string)}
+			p.opts[s.Name] = []string{s.Default.(string)}
 		} else {
 			p.opts[s.Name] = vals
 		}
@@ -113,7 +112,7 @@ func (p *Parser) parse(vals []string, s Param) {
 			is = append(is, int64(i))
 		}
 		if len(is) == 0 {
-			is = []int64{s.defval.(int64)}
+			is = []int64{s.Default.(int64)}
 		}
 		p.opts[s.Name] = is
 	case "float":
@@ -127,7 +126,7 @@ func (p *Parser) parse(vals []string, s Param) {
 			fs = append(fs, f)
 		}
 		if len(fs) == 0 {
-			fs = []float64{s.defval.(float64)}
+			fs = []float64{s.Default.(float64)}
 		}
 		p.opts[s.Name] = fs
 	case "bool":
@@ -145,7 +144,7 @@ func (p *Parser) parse(vals []string, s Param) {
 			bs = append(bs, b)
 		}
 		if len(bs) == 0 {
-			bs = []bool{s.defval.(bool)}
+			bs = []bool{s.Default.(bool)}
 		}
 		p.opts[s.Name] = bs
 	}
@@ -331,37 +330,42 @@ func NewParser(route string, spec []Param) (p *Parser, err error) {
 		case "string", "":
 			v = s.Default
 		case "int":
-			i := int(0)
-			if s.Default != "" {
-				i, err = strconv.Atoi(s.Default)
-				if err != nil {
-					return nil, fmt.Errorf("default value %q is not a valid integer", s.Default)
-				}
+			switch i := s.Default.(type) {
+			case int64:
+				v = i
+			case int:
+				v = int64(i)
+			case nil:
+				v = int64(0)
+			default:
+				return nil, fmt.Errorf("default value of %q must be int or int64 (given: %T)",
+					s.Name, s.Default)
 			}
-			v = int64(i)
 		case "float":
-			f := float64(0)
-			if s.Default != "" {
-				f, err = strconv.ParseFloat(s.Default, 64)
-				if err != nil {
-					return nil, fmt.Errorf("default value %q is not a valid float", s.Default)
-				}
+			switch f := s.Default.(type) {
+			case float32:
+				v = float64(f)
+			case float64:
+				v = f
+			case nil:
+				v = float64(0)
+			default:
+				return nil, fmt.Errorf("default value of %q must be float (given: %T)", s.Name, s.Default)
 			}
-			v = f
 		case "bool":
-			b := false
-			if s.Default != "" {
-				b, err = strconv.ParseBool(s.Default)
-				if err != nil {
-					return nil, fmt.Errorf("default value %q is not a valid bool", s.Default)
-				}
+			switch b := s.Default.(type) {
+			case bool:
+				v = b
+			case nil:
+				v = false
+			default:
+				return nil, fmt.Errorf("default value of %q must be bool (given: %T)", s.Name, s.Default)
 			}
-			v = b
 		default:
 			return nil, fmt.Errorf("invalid param type %q", s.Type)
 		}
 		s.Type = t
-		s.defval = v
+		s.Default = v
 		if s.Position > 0 {
 			pdef = append(pdef, s)
 		} else {
