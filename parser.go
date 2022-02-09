@@ -150,6 +150,7 @@ func (p *Parser) parse(vals []string, s Param) {
 }
 
 func (p *Parser) Parse(r *http.Request) {
+	p.errs = nil
 	if sfx := r.URL.Path[len(p.path):]; len(sfx) > 0 {
 		p.args = strings.Split(sfx, "/")
 	}

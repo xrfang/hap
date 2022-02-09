@@ -22,7 +22,7 @@ func (e Error) Error() string {
 		for _, s := range e.errs {
 			errs = append(errs, s.Error())
 		}
-		m["errs"] = errs
+		m["err"] = errs
 	}
 	je.Encode(m)
 	return bs.String()
