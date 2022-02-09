@@ -1,7 +1,6 @@
 package hap
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -172,8 +171,11 @@ func (p *Parser) Parse(r *http.Request) {
 	}
 }
 
-func (p *Parser) Errors() []error {
-	return p.errs
+func (p *Parser) Error() error {
+	if len(p.errs) == 0 {
+		return nil
+	}
+	return p.spec()
 }
 
 func (p *Parser) Strings(name string) ([]string, error) {
@@ -264,7 +266,7 @@ func (p *Parser) Arg(idx int) string {
 	return p.args[idx]
 }
 
-func (p *Parser) Help() string {
+func (p *Parser) spec() Error {
 	pargs := []string{p.path}
 	var qargs []string
 	for _, s := range p.pdef {
@@ -294,23 +296,29 @@ func (p *Parser) Help() string {
 	}
 	var args []map[string]interface{}
 	for _, s := range append(p.pdef, p.qdef...) {
-		args = append(args, map[string]interface{}{
+		a := map[string]interface{}{
 			"name":     s.Name,
 			"type":     s.Type,
-			"default":  s.Default,
 			"required": s.Required,
 			"memo":     s.Memo,
-		})
+		}
+		if !s.Required {
+			a["default"] = s.Default
+		}
+		args = append(args, a)
 	}
 	sort.Slice(args, func(i, j int) bool {
 		return args[i]["name"].(string) < args[j]["name"].(string)
 	})
-	var bs bytes.Buffer
-	je := json.NewEncoder(&bs)
-	je.SetIndent("", "    ")
-	je.SetEscapeHTML(false)
-	je.Encode(map[string]interface{}{"uri": uri, "args": args})
-	return bs.String()
+	return Error{
+		errs: p.errs,
+		path: uri,
+		args: args,
+	}
+}
+
+func (p *Parser) Usage() string {
+	return p.spec().Error()
 }
 
 func NewParser(route string, spec []Param) (p *Parser, err error) {
