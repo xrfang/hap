@@ -178,80 +178,80 @@ func (p *Parser) Error() error {
 	return p.spec()
 }
 
-func (p *Parser) Strings(name string) ([]string, error) {
+func (p *Parser) Strings(name string) []string {
 	switch v := p.opts[name].(type) {
 	case nil:
-		return nil, fmt.Errorf("parameter %q does not exist", name)
+		return nil
 	case []string:
-		return v, nil
+		return v
 	default:
-		return nil, fmt.Errorf("parameter %q is %T, not string", name, v)
+		panic(fmt.Errorf("parameter %q is %T, not string", name, v))
 	}
 }
 
-func (p *Parser) String(name string) (string, error) {
-	ss, err := p.Strings(name)
-	if err != nil {
-		return "", err
+func (p *Parser) String(name string) string {
+	ss := p.Strings(name)
+	if len(ss) == 0 {
+		return ""
 	}
-	return ss[0], nil
+	return ss[0]
 }
 
-func (p *Parser) Integers(name string) ([]int64, error) {
+func (p *Parser) Integers(name string) []int64 {
 	switch v := p.opts[name].(type) {
 	case nil:
-		return nil, fmt.Errorf("parameter %q does not exist", name)
+		return nil
 	case []int64:
-		return v, nil
+		return v
 	default:
-		return nil, fmt.Errorf("parameter %q is %T, not integer", name, v)
+		panic(fmt.Errorf("parameter %q is %T, not integer", name, v))
 	}
 }
 
-func (p *Parser) Integer(name string) (int64, error) {
-	is, err := p.Integers(name)
-	if err != nil {
-		return 0, err
+func (p *Parser) Integer(name string) int64 {
+	is := p.Integers(name)
+	if len(is) == 0 {
+		return 0
 	}
-	return is[0], nil
+	return is[0]
 }
 
-func (p *Parser) Floats(name string) ([]float64, error) {
+func (p *Parser) Floats(name string) []float64 {
 	switch v := p.opts[name].(type) {
 	case nil:
-		return nil, fmt.Errorf("parameter %q does not exist", name)
+		return nil
 	case []float64:
-		return v, nil
+		return v
 	default:
-		return nil, fmt.Errorf("parameter %q is %T, not float", name, v)
+		panic(fmt.Errorf("parameter %q is %T, not float", name, v))
 	}
 }
 
-func (p *Parser) Float(name string) (float64, error) {
-	fs, err := p.Floats(name)
-	if err != nil {
-		return 0, err
+func (p *Parser) Float(name string) float64 {
+	fs := p.Floats(name)
+	if len(fs) == 0 {
+		return 0
 	}
-	return fs[0], nil
+	return fs[0]
 }
 
-func (p *Parser) Bools(name string) ([]bool, error) {
+func (p *Parser) Bools(name string) []bool {
 	switch v := p.opts[name].(type) {
 	case nil:
-		return nil, fmt.Errorf("parameter %q does not exist", name)
+		return nil
 	case []bool:
-		return v, nil
+		return v
 	default:
-		return nil, fmt.Errorf("parameter %q is %T, not bool", name, v)
+		panic(fmt.Errorf("parameter %q is %T, not bool", name, v))
 	}
 }
 
-func (p *Parser) Bool(name string) (bool, error) {
-	bs, err := p.Bools(name)
-	if err != nil {
-		return false, err
+func (p *Parser) Bool(name string) bool {
+	bs := p.Bools(name)
+	if len(bs) == 0 {
+		return false
 	}
-	return bs[0], nil
+	return bs[0]
 }
 
 func (p *Parser) Route() string {
