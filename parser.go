@@ -14,6 +14,10 @@ import (
 )
 
 type (
+	Handler interface {
+		Route() string
+		http.Handler
+	}
 	Param struct {
 		Name     string
 		Type     string //string, int, float, bool
@@ -172,14 +176,14 @@ func (p *Parser) Parse(r *http.Request) {
 	}
 }
 
-func (p *Parser) Error() error {
+func (p Parser) Error() error {
 	if len(p.errs) == 0 {
 		return nil
 	}
 	return p.spec()
 }
 
-func (p *Parser) Strings(name string) []string {
+func (p Parser) Strings(name string) []string {
 	switch v := p.opts[name].(type) {
 	case nil:
 		return nil
@@ -190,7 +194,7 @@ func (p *Parser) Strings(name string) []string {
 	}
 }
 
-func (p *Parser) String(name string) string {
+func (p Parser) String(name string) string {
 	ss := p.Strings(name)
 	if len(ss) == 0 {
 		return ""
@@ -198,7 +202,7 @@ func (p *Parser) String(name string) string {
 	return ss[0]
 }
 
-func (p *Parser) Integers(name string) []int64 {
+func (p Parser) Integers(name string) []int64 {
 	switch v := p.opts[name].(type) {
 	case nil:
 		return nil
@@ -209,7 +213,7 @@ func (p *Parser) Integers(name string) []int64 {
 	}
 }
 
-func (p *Parser) Integer(name string) int64 {
+func (p Parser) Integer(name string) int64 {
 	is := p.Integers(name)
 	if len(is) == 0 {
 		return 0
@@ -217,7 +221,7 @@ func (p *Parser) Integer(name string) int64 {
 	return is[0]
 }
 
-func (p *Parser) Floats(name string) []float64 {
+func (p Parser) Floats(name string) []float64 {
 	switch v := p.opts[name].(type) {
 	case nil:
 		return nil
@@ -228,7 +232,7 @@ func (p *Parser) Floats(name string) []float64 {
 	}
 }
 
-func (p *Parser) Float(name string) float64 {
+func (p Parser) Float(name string) float64 {
 	fs := p.Floats(name)
 	if len(fs) == 0 {
 		return 0
@@ -236,7 +240,7 @@ func (p *Parser) Float(name string) float64 {
 	return fs[0]
 }
 
-func (p *Parser) Bools(name string) []bool {
+func (p Parser) Bools(name string) []bool {
 	switch v := p.opts[name].(type) {
 	case nil:
 		return nil
@@ -247,7 +251,7 @@ func (p *Parser) Bools(name string) []bool {
 	}
 }
 
-func (p *Parser) Bool(name string) bool {
+func (p Parser) Bool(name string) bool {
 	bs := p.Bools(name)
 	if len(bs) == 0 {
 		return false
@@ -255,19 +259,19 @@ func (p *Parser) Bool(name string) bool {
 	return bs[0]
 }
 
-func (p *Parser) Route() string {
+func (p Parser) Route() string {
 	return p.path
 }
 
-func (p *Parser) Args() int {
+func (p Parser) Args() int {
 	return len(p.args)
 }
 
-func (p *Parser) Arg(idx int) string {
+func (p Parser) Arg(idx int) string {
 	return p.args[idx]
 }
 
-func (p *Parser) spec() Error {
+func (p Parser) spec() Error {
 	pargs := []string{p.path}
 	var qargs []string
 	for _, s := range p.pdef {
@@ -318,19 +322,23 @@ func (p *Parser) spec() Error {
 	}
 }
 
-func (p *Parser) Usage() string {
+func (p Parser) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", http.StatusNotImplemented)
+}
+
+func (p Parser) Usage() string {
 	return p.spec().Error()
 }
 
-func NewParser(route string, spec []Param) (p *Parser, err error) {
+func (p *Parser) Init(route string, spec []Param) error {
 	var qdef, pdef []Param
 	dup := make(map[string]bool)
 	for _, s := range spec {
 		if s.Name == "" {
-			return nil, errors.New("empty arg name")
+			return errors.New("empty arg name")
 		}
 		if dup[s.Name] {
-			return nil, fmt.Errorf("arg name %q duplicated", s.Name)
+			return fmt.Errorf("arg name %q duplicated", s.Name)
 		}
 		dup[s.Name] = true
 		t := strings.ToLower(s.Type)
@@ -347,7 +355,7 @@ func NewParser(route string, spec []Param) (p *Parser, err error) {
 			case nil:
 				v = int64(0)
 			default:
-				return nil, fmt.Errorf("default value of %q must be int or int64 (given: %T)",
+				return fmt.Errorf("default value of %q must be int or int64 (given: %T)",
 					s.Name, s.Default)
 			}
 		case "float":
@@ -359,7 +367,7 @@ func NewParser(route string, spec []Param) (p *Parser, err error) {
 			case nil:
 				v = float64(0)
 			default:
-				return nil, fmt.Errorf("default value of %q must be float (given: %T)", s.Name, s.Default)
+				return fmt.Errorf("default value of %q must be float (given: %T)", s.Name, s.Default)
 			}
 		case "bool":
 			switch b := s.Default.(type) {
@@ -368,10 +376,10 @@ func NewParser(route string, spec []Param) (p *Parser, err error) {
 			case nil:
 				v = false
 			default:
-				return nil, fmt.Errorf("default value of %q must be bool (given: %T)", s.Name, s.Default)
+				return fmt.Errorf("default value of %q must be bool (given: %T)", s.Name, s.Default)
 			}
 		default:
-			return nil, fmt.Errorf("invalid param type %q", s.Type)
+			return fmt.Errorf("invalid param type %q", s.Type)
 		}
 		s.Type = t
 		s.Default = v
@@ -392,8 +400,21 @@ func NewParser(route string, spec []Param) (p *Parser, err error) {
 		return pi.Position < pj.Position
 	})
 	if dupErr != nil {
-		return nil, dupErr
+		return dupErr
 	}
 	sort.Slice(qdef, func(i, j int) bool { return qdef[i].Name < qdef[j].Name })
-	return &Parser{pdef: pdef, qdef: qdef, path: route, opts: make(map[string]interface{})}, nil
+	p.pdef = pdef
+	p.qdef = qdef
+	p.path = route
+	p.opts = make(map[string]interface{})
+	return nil
+}
+
+func Register(h Handler, mx ...*http.ServeMux) {
+	if len(mx) == 0 {
+		mx = []*http.ServeMux{http.DefaultServeMux}
+	}
+	for _, x := range mx {
+		x.Handle(h.Route(), h)
+	}
 }
