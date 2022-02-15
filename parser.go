@@ -15,7 +15,7 @@ import (
 
 type (
 	Handler interface {
-		Route() string
+		Routes() []string
 		http.Handler
 	}
 	Param struct {
@@ -259,8 +259,14 @@ func (p Parser) Bool(name string) bool {
 	return bs[0]
 }
 
-func (p Parser) Route() string {
-	return p.path
+func (p Parser) Routes() []string {
+	rs := []string{p.path}
+	if strings.HasSuffix(p.path, "/") {
+		rs = append(rs, p.path[:len(p.path)-1])
+	} else {
+		rs = append(rs, p.path+"/")
+	}
+	return rs
 }
 
 func (p Parser) Args() int {
@@ -272,8 +278,7 @@ func (p Parser) Arg(idx int) string {
 }
 
 func (p Parser) spec() Error {
-	pargs := []string{p.path}
-	var qargs []string
+	var pargs, qargs []string
 	for _, s := range p.pdef {
 		var stub string
 		if s.Required {
@@ -283,7 +288,7 @@ func (p Parser) spec() Error {
 		}
 		pargs = append(pargs, stub)
 	}
-	if len(pargs) < 2 {
+	if len(pargs) == 0 {
 		pargs = append(pargs, `[arguments]`)
 	}
 	for _, s := range p.qdef {
@@ -295,7 +300,7 @@ func (p Parser) spec() Error {
 		}
 		qargs = append(qargs, stub)
 	}
-	uri := strings.Join(pargs, "/")
+	uri := path.Join(p.path, strings.Join(pargs, "/"))
 	if len(qargs) > 0 {
 		uri += `?` + strings.Join(qargs, "&")
 	}
@@ -414,7 +419,9 @@ func Register(h Handler, mx ...*http.ServeMux) {
 	if len(mx) == 0 {
 		mx = []*http.ServeMux{http.DefaultServeMux}
 	}
-	for _, x := range mx {
-		x.Handle(h.Route(), h)
+	for _, r := range h.Routes() {
+		for _, x := range mx {
+			x.Handle(r, h)
+		}
 	}
 }
