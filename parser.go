@@ -155,8 +155,8 @@ func (p *Parser) parse(vals []string, s Param) {
 
 func (p *Parser) Parse(r *http.Request) {
 	p.errs = nil
-	if sfx := r.URL.Path[len(p.path):]; len(sfx) > 0 {
-		p.args = strings.Split(sfx, "/")
+	if sfx := r.URL.Path[len(p.path):]; len(sfx) > 1 {
+		p.args = strings.Split(sfx[1:], "/")
 	}
 	for i, s := range p.pdef {
 		var arg []string
@@ -260,13 +260,7 @@ func (p Parser) Bool(name string) bool {
 }
 
 func (p Parser) Routes() []string {
-	rs := []string{p.path}
-	if strings.HasSuffix(p.path, "/") {
-		rs = append(rs, p.path[:len(p.path)-1])
-	} else {
-		rs = append(rs, p.path+"/")
-	}
-	return rs
+	return []string{p.path, p.path + "/"}
 }
 
 func (p Parser) Args() int {
@@ -411,6 +405,9 @@ func (p *Parser) Init(route string, spec []Param) error {
 	p.pdef = pdef
 	p.qdef = qdef
 	p.path = route
+	if strings.HasSuffix(p.path, "/") {
+		p.path = route[:len(p.path)-1]
+	}
 	p.opts = make(map[string]interface{})
 	return nil
 }
