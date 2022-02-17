@@ -32,6 +32,7 @@ func main() {
 		{Name: "arg2", Type: "string", Memo: "string param", Required: true},
 		{Name: "arg3", Type: "float", Memo: "float params", Required: false},
 		{Name: "help", Type: "bool", Memo: "show help"},
+		{Memo: "example of using HAP"},
 	})
 	if err != nil {
 		panic(err)
