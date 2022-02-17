@@ -7,6 +7,7 @@ import (
 
 type Error struct {
 	errs []error
+	help string
 	path string
 	args []map[string]interface{}
 }
@@ -16,7 +17,7 @@ func (e Error) Error() string {
 	je := json.NewEncoder(&bs)
 	je.SetIndent("", "    ")
 	je.SetEscapeHTML(false)
-	m := map[string]interface{}{"uri": e.path, "arg": e.args}
+	m := map[string]interface{}{"for": e.help, "uri": e.path, "arg": e.args}
 	if len(e.errs) > 0 {
 		var errs []string
 		for _, s := range e.errs {

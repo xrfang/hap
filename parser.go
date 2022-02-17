@@ -30,6 +30,7 @@ type (
 		qdef []Param //query parameters
 		pdef []Param //positional (path) parameters
 		opts map[string]interface{}
+		help string
 		args []string
 		path string
 		errs []error
@@ -94,7 +95,7 @@ func args(r *http.Request) (url.Values, error) {
 
 func (p *Parser) parse(vals []string, s Param) {
 	if len(vals) == 0 && s.Required {
-		p.errs = append(p.errs, fmt.Errorf("missing %q", s.Name))
+		p.errs = append(p.errs, fmt.Errorf("missing '%s'", s.Name))
 		return
 	}
 	switch s.Type {
@@ -109,7 +110,7 @@ func (p *Parser) parse(vals []string, s Param) {
 		for _, v := range vals {
 			i, err := strconv.Atoi(v)
 			if err != nil {
-				p.errs = append(p.errs, fmt.Errorf("%q is not an integer (arg:%s)", v, s.Name))
+				p.errs = append(p.errs, fmt.Errorf("'%s' is not an integer (arg:%s)", v, s.Name))
 				return
 			}
 			is = append(is, int64(i))
@@ -123,7 +124,7 @@ func (p *Parser) parse(vals []string, s Param) {
 		for _, v := range vals {
 			f, err := strconv.ParseFloat(v, 64)
 			if err != nil {
-				p.errs = append(p.errs, fmt.Errorf("%q is not a float (arg:%s)", v, s.Name))
+				p.errs = append(p.errs, fmt.Errorf("'%s' is not a float (arg:%s)", v, s.Name))
 				return
 			}
 			fs = append(fs, f)
@@ -140,7 +141,7 @@ func (p *Parser) parse(vals []string, s Param) {
 			if v != "" {
 				b, err = strconv.ParseBool(v)
 				if err != nil {
-					p.errs = append(p.errs, fmt.Errorf("%q is not a bool (arg:%s)", v, s.Name))
+					p.errs = append(p.errs, fmt.Errorf("'%s' is not a bool (arg:%s)", v, s.Name))
 					return
 				}
 			}
@@ -190,7 +191,7 @@ func (p Parser) Strings(name string) []string {
 	case []string:
 		return v
 	default:
-		panic(fmt.Errorf("parameter %q is %T, not string", name, v))
+		panic(fmt.Errorf("parameter '%s' is %T, not string", name, v))
 	}
 }
 
@@ -209,7 +210,7 @@ func (p Parser) Integers(name string) []int64 {
 	case []int64:
 		return v
 	default:
-		panic(fmt.Errorf("parameter %q is %T, not integer", name, v))
+		panic(fmt.Errorf("parameter '%s' is %T, not integer", name, v))
 	}
 }
 
@@ -228,7 +229,7 @@ func (p Parser) Floats(name string) []float64 {
 	case []float64:
 		return v
 	default:
-		panic(fmt.Errorf("parameter %q is %T, not float", name, v))
+		panic(fmt.Errorf("parameter '%s' is %T, not float", name, v))
 	}
 }
 
@@ -247,7 +248,7 @@ func (p Parser) Bools(name string) []bool {
 	case []bool:
 		return v
 	default:
-		panic(fmt.Errorf("parameter %q is %T, not bool", name, v))
+		panic(fmt.Errorf("parameter '%s' is %T, not bool", name, v))
 	}
 }
 
@@ -316,6 +317,7 @@ func (p Parser) spec() Error {
 	})
 	return Error{
 		errs: p.errs,
+		help: p.help,
 		path: uri,
 		args: args,
 	}
@@ -333,17 +335,14 @@ func (p *Parser) Init(route string, spec []Param) error {
 	var qdef, pdef []Param
 	dup := make(map[string]bool)
 	for _, s := range spec {
-		if s.Name == "" {
-			return errors.New("empty arg name")
-		}
 		if dup[s.Name] {
-			return fmt.Errorf("arg name %q duplicated", s.Name)
+			return fmt.Errorf("arg name '%s' duplicated", s.Name)
 		}
 		dup[s.Name] = true
 		t := strings.ToLower(s.Type)
 		var v interface{}
 		switch t {
-		case "string", "":
+		case "string":
 			v = s.Default
 		case "int":
 			switch i := s.Default.(type) {
@@ -354,7 +353,7 @@ func (p *Parser) Init(route string, spec []Param) error {
 			case nil:
 				v = int64(0)
 			default:
-				return fmt.Errorf("default value of %q must be int or int64 (given: %T)",
+				return fmt.Errorf("default value of '%s' must be int or int64 (given: %T)",
 					s.Name, s.Default)
 			}
 		case "float":
@@ -366,7 +365,7 @@ func (p *Parser) Init(route string, spec []Param) error {
 			case nil:
 				v = float64(0)
 			default:
-				return fmt.Errorf("default value of %q must be float (given: %T)", s.Name, s.Default)
+				return fmt.Errorf("default value of '%s' must be float (given: %T)", s.Name, s.Default)
 			}
 		case "bool":
 			switch b := s.Default.(type) {
@@ -375,10 +374,20 @@ func (p *Parser) Init(route string, spec []Param) error {
 			case nil:
 				v = false
 			default:
-				return fmt.Errorf("default value of %q must be bool (given: %T)", s.Name, s.Default)
+				return fmt.Errorf("default value of '%s' must be bool (given: %T)", s.Name, s.Default)
+			}
+		case "":
+			if s.Name != "" { //same as string
+				v = s.Default
+			} else { //help message
+				p.help = s.Memo
+				continue
 			}
 		default:
-			return fmt.Errorf("invalid param type %q", s.Type)
+			return fmt.Errorf("invalid param type '%s'", s.Type)
+		}
+		if s.Name == "" { //todo...
+			return errors.New("empty arg name")
 		}
 		s.Type = t
 		s.Default = v
@@ -393,7 +402,7 @@ func (p *Parser) Init(route string, spec []Param) error {
 		pi := pdef[i]
 		pj := pdef[j]
 		if pi.Position == pj.Position {
-			dupErr = fmt.Errorf("same position (%q, %q)", pi.Name, pj.Name)
+			dupErr = fmt.Errorf("same position ('%s', '%s')", pi.Name, pj.Name)
 			return false
 		}
 		return pi.Position < pj.Position
