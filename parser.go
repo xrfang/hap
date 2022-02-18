@@ -14,7 +14,8 @@ import (
 )
 
 type (
-	Handler interface {
+	Validator func(interface{}) error
+	Handler   interface {
 		Routes() []string
 		http.Handler
 	}
@@ -23,6 +24,7 @@ type (
 		Type     string //string, int, float, bool
 		Default  interface{}
 		Required bool
+		Check    Validator
 		Position uint
 		Memo     string
 	}
@@ -103,6 +105,13 @@ func (p *Parser) parse(vals []string, s Param) {
 		if len(vals) == 0 {
 			p.opts[s.Name] = []string{s.Default.(string)}
 		} else {
+			if s.Check != nil {
+				for _, v := range vals {
+					if err := s.Check(v); err != nil {
+						p.errs = append(p.errs, err)
+					}
+				}
+			}
 			p.opts[s.Name] = vals
 		}
 	case "int":
@@ -117,6 +126,12 @@ func (p *Parser) parse(vals []string, s Param) {
 		}
 		if len(is) == 0 {
 			is = []int64{s.Default.(int64)}
+		} else if s.Check != nil {
+			for _, v := range is {
+				if err := s.Check(v); err != nil {
+					p.errs = append(p.errs, err)
+				}
+			}
 		}
 		p.opts[s.Name] = is
 	case "float":
@@ -131,6 +146,12 @@ func (p *Parser) parse(vals []string, s Param) {
 		}
 		if len(fs) == 0 {
 			fs = []float64{s.Default.(float64)}
+		} else if s.Check != nil {
+			for _, v := range fs {
+				if err := s.Check(v); err != nil {
+					p.errs = append(p.errs, err)
+				}
+			}
 		}
 		p.opts[s.Name] = fs
 	case "bool":
@@ -309,6 +330,9 @@ func (p Parser) spec() Error {
 		}
 		if !s.Required {
 			a["default"] = s.Default
+		}
+		if s.Check != nil {
+			a["check"] = s.Check(nil).Error()
 		}
 		args = append(args, a)
 	}
