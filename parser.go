@@ -334,6 +334,7 @@ func (p Parser) Usage() string {
 func (p *Parser) Init(route string, spec []Param) error {
 	var qdef, pdef []Param
 	dup := make(map[string]bool)
+specParse:
 	for _, s := range spec {
 		if dup[s.Name] {
 			return fmt.Errorf("arg name '%s' duplicated", s.Name)
@@ -342,8 +343,19 @@ func (p *Parser) Init(route string, spec []Param) error {
 		t := strings.ToLower(s.Type)
 		var v interface{}
 		switch t {
-		case "string":
-			v = s.Default
+		case "string", "":
+			switch r := s.Default.(type) {
+			case string:
+				v = r
+			case nil:
+				v = ""
+			default:
+				return fmt.Errorf("default value of '%s' must be string (given: %T)", s.Name, s.Default)
+			}
+			if s.Name == "" && t == "" {
+				p.help = s.Memo
+				continue specParse
+			}
 		case "int":
 			switch i := s.Default.(type) {
 			case int64:
@@ -376,17 +388,10 @@ func (p *Parser) Init(route string, spec []Param) error {
 			default:
 				return fmt.Errorf("default value of '%s' must be bool (given: %T)", s.Name, s.Default)
 			}
-		case "":
-			if s.Name != "" { //same as string
-				v = s.Default
-			} else { //help message
-				p.help = s.Memo
-				continue
-			}
 		default:
 			return fmt.Errorf("invalid param type '%s'", s.Type)
 		}
-		if s.Name == "" { //todo...
+		if s.Name == "" {
 			return errors.New("empty arg name")
 		}
 		s.Type = t
