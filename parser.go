@@ -15,8 +15,8 @@ import (
 
 type (
 	HandlerInfo struct {
-		Route   string
-		Purpose string
+		Route   string `json:"route"`
+		Purpose string `json:"purpose"`
 	}
 	Validator func(interface{}) error
 	Handler   interface {
@@ -291,6 +291,9 @@ func (p Parser) Purpose() string {
 }
 
 func (p Parser) Routes() []string {
+	if p.path == "" {
+		return []string{"/"}
+	}
 	return []string{p.path, p.path + "/"}
 }
 
