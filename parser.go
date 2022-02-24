@@ -14,9 +14,14 @@ import (
 )
 
 type (
+	HandlerInfo struct {
+		Route   string
+		Purpose string
+	}
 	Validator func(interface{}) error
 	Handler   interface {
 		Routes() []string
+		Purpose() string
 		http.Handler
 	}
 	Param struct {
@@ -281,6 +286,10 @@ func (p Parser) Bool(name string) bool {
 	return bs[0]
 }
 
+func (p Parser) Purpose() string {
+	return p.help
+}
+
 func (p Parser) Routes() []string {
 	return []string{p.path, p.path + "/"}
 }
@@ -450,13 +459,30 @@ specParse:
 	return nil
 }
 
+var handlers map[string]string
+
 func Register(h Handler, mx ...*http.ServeMux) {
 	if len(mx) == 0 {
 		mx = []*http.ServeMux{http.DefaultServeMux}
 	}
-	for _, r := range h.Routes() {
+	routes := h.Routes()
+	for _, r := range routes {
 		for _, x := range mx {
 			x.Handle(r, h)
 		}
 	}
+	handlers[routes[0]] = h.Purpose()
+}
+
+func Manifest() []HandlerInfo {
+	var his []HandlerInfo
+	for r, p := range handlers {
+		his = append(his, HandlerInfo{r, p})
+	}
+	sort.Slice(his, func(i, j int) bool { return his[i].Route < his[j].Route })
+	return his
+}
+
+func init() {
+	handlers = make(map[string]string)
 }

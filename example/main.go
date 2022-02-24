@@ -49,6 +49,9 @@ func main() {
 		panic(err)
 	}
 	hap.Register(at)
+	for _, m := range hap.Manifest() {
+		fmt.Printf("%s\t%s\n", m.Route, m.Purpose)
+	}
 	svr := http.Server{Addr: ":1234"}
 	panic(svr.ListenAndServe())
 }
