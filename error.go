@@ -12,11 +12,7 @@ type Error struct {
 	args []map[string]interface{}
 }
 
-func (e Error) Error() string {
-	var bs bytes.Buffer
-	je := json.NewEncoder(&bs)
-	je.SetIndent("", "    ")
-	je.SetEscapeHTML(false)
+func (e Error) Mapify() map[string]interface{} {
 	m := map[string]interface{}{"for": e.help, "uri": e.path, "arg": e.args}
 	if len(e.errs) > 0 {
 		var errs []string
@@ -25,6 +21,14 @@ func (e Error) Error() string {
 		}
 		m["err"] = errs
 	}
-	je.Encode(m)
+	return m
+}
+
+func (e Error) Error() string {
+	var bs bytes.Buffer
+	je := json.NewEncoder(&bs)
+	je.SetIndent("", "    ")
+	je.SetEscapeHTML(false)
+	je.Encode(e.Mapify())
 	return bs.String()
 }
