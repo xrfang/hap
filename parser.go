@@ -207,7 +207,7 @@ func (p Parser) Error() error {
 	if len(p.errs) == 0 {
 		return nil
 	}
-	return p.spec()
+	return p.Spec()
 }
 
 func (p Parser) Strings(name string) []string {
@@ -305,7 +305,7 @@ func (p Parser) Arg(idx int) string {
 	return p.args[idx]
 }
 
-func (p Parser) spec() Error {
+func (p Parser) Spec() Error {
 	var pargs, qargs []string
 	for _, s := range p.pdef {
 		var stub string
@@ -364,7 +364,7 @@ func (p Parser) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p Parser) Usage() string {
-	return p.spec().Error()
+	return p.Spec().Error()
 }
 
 func (p *Parser) Init(route string, spec []Param) error {
