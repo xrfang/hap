@@ -367,6 +367,35 @@ func (p Parser) Usage() string {
 	return p.Spec().Error()
 }
 
+func (p Parser) ExportAll() map[string]interface{} {
+	return p.opts
+}
+
+func (p Parser) Export() map[string]interface{} {
+	args := make(map[string]interface{})
+	for k, v := range p.opts {
+		switch d := v.(type) {
+		case []string:
+			if len(d) > 0 {
+				args[k] = d[0]
+			}
+		case []int64:
+			if len(d) > 0 {
+				args[k] = d[0]
+			}
+		case []float64:
+			if len(d) > 0 {
+				args[k] = d[0]
+			}
+		case []bool:
+			if len(d) > 0 {
+				args[k] = d[0]
+			}
+		}
+	}
+	return args
+}
+
 func (p *Parser) Init(route string, spec []Param) error {
 	var qdef, pdef []Param
 	dup := make(map[string]bool)
