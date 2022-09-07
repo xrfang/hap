@@ -44,8 +44,8 @@ type (
 	}
 )
 
-//parse query string in G-P-C order, i.e. GET (query string) has highest priority,
-//POST (body) follows, and COOKIE has lowest priority
+// parse query string in G-P-C order, i.e. GET (query string) has highest priority,
+// POST (body) follows, and COOKIE has lowest priority
 func args(r *http.Request) (url.Values, error) {
 	vs := make(url.Values)
 	for _, c := range r.Cookies() {
@@ -208,6 +208,10 @@ func (p Parser) Error() error {
 		return nil
 	}
 	return p.Spec()
+}
+
+func (p Parser) Errs() []error {
+	return p.errs
 }
 
 func (p Parser) Strings(name string) []string {
