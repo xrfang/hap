@@ -37,6 +37,7 @@ type (
 		qdef []Param //query parameters
 		pdef []Param //positional (path) parameters
 		opts map[string]interface{}
+		has  map[string]bool
 		help string
 		args []string
 		path string
@@ -198,10 +199,9 @@ func (p *Parser) Parse(r *http.Request) {
 		return
 	}
 	for _, s := range p.qdef {
-		if vs.Has(s.Name) {
-			v := vs[s.Name]
-			p.parse(v, s)
-		}
+		p.has[s.Name] = vs.Has(s.Name)
+		v := vs[s.Name]
+		p.parse(v, s)
 	}
 }
 
@@ -217,11 +217,7 @@ func (p Parser) Errs() []error {
 }
 
 func (p Parser) Has(name string) bool {
-	switch p.opts[name].(type) {
-	case nil:
-		return false
-	}
-	return true
+	return p.has[name]
 }
 
 func (p Parser) Strings(name string) []string {
@@ -502,6 +498,7 @@ specParse:
 		p.path = route[:len(p.path)-1]
 	}
 	p.opts = make(map[string]interface{})
+	p.has = make(map[string]bool)
 	return nil
 }
 
