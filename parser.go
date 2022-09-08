@@ -214,6 +214,14 @@ func (p Parser) Errs() []error {
 	return p.errs
 }
 
+func (p Parser) Has(name string) bool {
+	switch p.opts[name].(type) {
+	case nil:
+		return false
+	}
+	return true
+}
+
 func (p Parser) Strings(name string) []string {
 	switch v := p.opts[name].(type) {
 	case nil:
