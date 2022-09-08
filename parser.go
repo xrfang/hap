@@ -198,8 +198,10 @@ func (p *Parser) Parse(r *http.Request) {
 		return
 	}
 	for _, s := range p.qdef {
-		v := vs[s.Name]
-		p.parse(v, s)
+		if vs.Has(s.Name) {
+			v := vs[s.Name]
+			p.parse(v, s)
+		}
 	}
 }
 
