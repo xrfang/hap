@@ -326,9 +326,6 @@ func (p Parser) Spec() Error {
 		}
 		pargs = append(pargs, stub)
 	}
-	if len(pargs) == 0 {
-		pargs = append(pargs, `[arguments]`)
-	}
 	for _, s := range p.qdef {
 		var stub string
 		if s.Required {

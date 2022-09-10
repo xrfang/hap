@@ -28,6 +28,7 @@ func (at apiTest) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func main() {
 	var at apiTest
 	err := at.Init("/api/test", []hap.Param{
+		{Name: "arg0", Type: "int", Memo: "positional argument", Position: 1, Required: true},
 		{Name: "arg1", Type: "int", Memo: "int param", Default: 123},
 		{Name: "arg2", Type: "string", Memo: "string param", Required: true,
 			Check: func(i interface{}) error {
