@@ -371,6 +371,7 @@ func (p Parser) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p Parser) Usage() string {
+	p.errs = nil
 	return p.Spec().Error()
 }
 
