@@ -122,8 +122,17 @@ func (p *Parser) parse(vals []string, s Param) {
 		}
 	case "int":
 		var is []int64
+		var base int
 		for _, v := range vals {
-			i, err := strconv.Atoi(v)
+			switch {
+			case strings.HasPrefix(v, "0x"), strings.HasPrefix(v, "0X"):
+				base = 16
+			case strings.HasPrefix(v, "0"):
+				base = 8
+			default:
+				base = 10
+			}
+			i, err := strconv.ParseInt(v, base, 64)
 			if err != nil {
 				p.errs = append(p.errs, fmt.Errorf("'%s' is not an integer (arg:%s)", v, s.Name))
 				return
