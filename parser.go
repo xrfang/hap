@@ -360,7 +360,9 @@ func (p Parser) Spec() Error {
 			a["default"] = s.Default
 		}
 		if s.Check != nil {
-			a["check"] = s.Check(nil).Error()
+			if err := s.Check(nil); err != nil {
+				a["check"] = err.Error()
+			}
 		}
 		args = append(args, a)
 	}
