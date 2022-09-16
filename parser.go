@@ -354,6 +354,7 @@ func (p Parser) Spec() Error {
 			"name":     s.Name,
 			"type":     s.Type,
 			"required": s.Required,
+			"position": s.Position,
 			"memo":     s.Memo,
 		}
 		if !s.Required {
