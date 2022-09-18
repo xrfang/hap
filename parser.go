@@ -2,7 +2,6 @@ package hap
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"mime"
 	"net/http"
@@ -31,7 +30,9 @@ type (
 		Required bool
 		Check    Validator
 		Position uint
+		Methods  string //CSV格式的HTTP方法列表，默认为空表示全部允许
 		Memo     string
+		verbs    HttpMethods
 	}
 	Parser struct {
 		qdef []Param //query parameters
@@ -191,11 +192,16 @@ func (p *Parser) parse(vals []string, s Param) {
 }
 
 func (p *Parser) Parse(r *http.Request) {
+	p.opts = make(map[string]interface{})
+	p.has = make(map[string]bool)
 	p.errs = nil
 	if sfx := r.URL.Path[len(p.path):]; len(sfx) > 1 {
 		p.args = strings.Split(sfx[1:], "/")
 	}
 	for i, s := range p.pdef {
+		if !s.verbs.Contains(HttpMethod(r.Method)) {
+			continue
+		}
 		var arg []string
 		if i < len(p.args) {
 			arg = []string{p.args[i]}
@@ -208,6 +214,9 @@ func (p *Parser) Parse(r *http.Request) {
 		return
 	}
 	for _, s := range p.qdef {
+		if !s.verbs.Contains(HttpMethod(r.Method)) {
+			continue
+		}
 		p.has[s.Name] = vs.Has(s.Name)
 		v := vs[s.Name]
 		p.parse(v, s)
@@ -419,12 +428,24 @@ func (p Parser) Export() map[string]interface{} {
 func (p *Parser) Init(route string, spec []Param) error {
 	var qdef, pdef []Param
 	dup := make(map[string]bool)
-specParse:
 	for _, s := range spec {
 		if dup[s.Name] {
 			return fmt.Errorf("arg name '%s' duplicated", s.Name)
 		}
 		dup[s.Name] = true
+		if s.Name == "" {
+			p.help = s.Memo
+			continue
+		}
+		for _, m := range strings.Split(s.Methods, ",") {
+			if m = strings.TrimSpace(m); m == "" {
+				continue
+			}
+			if HttpMethod(m).Value() == 0 {
+				return fmt.Errorf("invalid HTTP method %q (arg:%s)", m, s.Name)
+			}
+			s.verbs = append(s.verbs, HttpMethod(m))
+		}
 		t := strings.ToLower(s.Type)
 		var v interface{}
 		switch t {
@@ -437,10 +458,7 @@ specParse:
 			default:
 				return fmt.Errorf("default value of '%s' must be string (given: %T)", s.Name, s.Default)
 			}
-			if s.Name == "" && t == "" {
-				p.help = s.Memo
-				continue specParse
-			}
+			t = "string"
 		case "int":
 			switch i := s.Default.(type) {
 			case int64:
@@ -476,9 +494,6 @@ specParse:
 		default:
 			return fmt.Errorf("invalid param type '%s'", s.Type)
 		}
-		if s.Name == "" {
-			return errors.New("empty arg name")
-		}
 		s.Type = t
 		s.Default = v
 		if s.Position > 0 {
@@ -507,8 +522,6 @@ specParse:
 	if strings.HasSuffix(p.path, "/") {
 		p.path = route[:len(p.path)-1]
 	}
-	p.opts = make(map[string]interface{})
-	p.has = make(map[string]bool)
 	return nil
 }
 

@@ -20,9 +20,7 @@ func (at apiTest) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Fprintln(w, "arg1:", at.Integer("arg1"))
-	fmt.Fprintln(w, "arg2:", at.String("arg2"))
-	fmt.Fprintln(w, "arg3:", at.Floats("arg3"))
+	fmt.Fprintf(w, "%+v\n", at.ExportAll())
 }
 
 func main() {
@@ -43,6 +41,8 @@ func main() {
 				}
 			}},
 		{Name: "arg3", Type: "float", Memo: "float params", Required: false},
+		{Name: "garg", Memo: "get param", Required: true, Methods: "GET"},
+		{Name: "parg", Memo: "post/put/patch param", Required: true, Methods: "POST,PUT,PATCH"},
 		{Name: "help", Type: "bool", Memo: "show help"},
 		{Memo: "example of using HAP"},
 	})
