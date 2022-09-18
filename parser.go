@@ -366,6 +366,9 @@ func (p Parser) Spec() Error {
 			"position": s.Position,
 			"memo":     s.Memo,
 		}
+		if len(s.verbs) > 0 {
+			a["methods"] = s.verbs.String()
+		}
 		if !s.Required {
 			a["default"] = s.Default
 		}
