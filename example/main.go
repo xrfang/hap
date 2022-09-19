@@ -10,17 +10,17 @@ import (
 type apiTest struct{ hap.Parser }
 
 func (at apiTest) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	at.Parse(r)
-	if at.Bool("help") {
+	p := at.Parse(r)
+	if p.Bool("help") {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintln(w, at.Usage())
 		return
 	}
-	if err := at.Error(); err != nil {
+	if err := p.Error(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Fprintf(w, "%+v\n", at.ExportAll())
+	fmt.Fprintf(w, "%+v\n", p.ExportAll())
 }
 
 func main() {

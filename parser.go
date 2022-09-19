@@ -1,11 +1,8 @@
 package hap
 
 import (
-	"encoding/json"
 	"fmt"
-	"mime"
 	"net/http"
-	"net/url"
 	"path"
 	"sort"
 	"strconv"
@@ -37,89 +34,36 @@ type (
 	Parser struct {
 		qdef []Param //query parameters
 		pdef []Param //positional (path) parameters
-		opts map[string]interface{}
-		has  map[string]bool
 		help string
-		args []string
 		path string
+	}
+	Result struct {
+		pars *Parser
+		args []string
 		errs []error
+		has  map[string]bool
+		opts map[string]interface{}
 	}
 )
 
-// parse query string in G-P-C order, i.e. GET (query string) has highest priority,
-// POST (body) follows, and COOKIE has lowest priority
-func args(r *http.Request) (url.Values, error) {
-	vs := make(url.Values)
-	for _, c := range r.Cookies() {
-		vs[c.Name] = []string{c.Value}
-	}
-	switch r.Method {
-	case http.MethodPost, http.MethodPut, http.MethodPatch:
-		ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
-		switch ct {
-		case "application/json":
-			var kv map[string]interface{}
-			err := json.NewDecoder(r.Body).Decode(&kv)
-			if err != nil {
-				return nil, err
-			}
-			for k, v := range kv {
-				switch v := v.(type) {
-				case string:
-					vs[k] = []string{v}
-				case []string:
-					vs[k] = v
-				default:
-					vs[k] = []string{fmt.Sprintf("%v", v)}
-				}
-			}
-		case "multipart/form-data":
-			err := r.ParseMultipartForm(10 << 20)
-			if err != nil {
-				return nil, err
-			}
-			fallthrough
-		default:
-			err := r.ParseForm()
-			if err != nil {
-				return nil, err
-			}
-			for k, v := range r.Form {
-				vs[k] = v
-			}
-		}
-	}
-	for k, v := range r.URL.Query() {
-		vs[k] = v
-	}
-	pq, _ := url.ParseQuery(r.URL.Path[1:])
-	for k, v := range pq {
-		k = path.Base(k)
-		if !vs.Has(k) {
-			vs[k] = v
-		}
-	}
-	return vs, nil
-}
-
-func (p *Parser) parse(vals []string, s Param) {
+func (r *Result) parse(vals []string, s Param) {
 	if len(vals) == 0 && s.Required {
-		p.errs = append(p.errs, fmt.Errorf("missing '%s'", s.Name))
+		r.errs = append(r.errs, fmt.Errorf("missing '%s'", s.Name))
 		return
 	}
 	switch s.Type {
 	case "string":
 		if len(vals) == 0 {
-			p.opts[s.Name] = []string{s.Default.(string)}
+			r.opts[s.Name] = []string{s.Default.(string)}
 		} else {
 			if s.Check != nil {
 				for _, v := range vals {
 					if err := s.Check(v); err != nil {
-						p.errs = append(p.errs, err)
+						r.errs = append(r.errs, err)
 					}
 				}
 			}
-			p.opts[s.Name] = vals
+			r.opts[s.Name] = vals
 		}
 	case "int":
 		var is []int64
@@ -135,7 +79,7 @@ func (p *Parser) parse(vals []string, s Param) {
 			}
 			i, err := strconv.ParseInt(v, base, 64)
 			if err != nil {
-				p.errs = append(p.errs, fmt.Errorf("'%s' is not an integer (arg:%s)", v, s.Name))
+				r.errs = append(r.errs, fmt.Errorf("'%s' is not an integer (arg:%s)", v, s.Name))
 				return
 			}
 			is = append(is, int64(i))
@@ -145,17 +89,17 @@ func (p *Parser) parse(vals []string, s Param) {
 		} else if s.Check != nil {
 			for _, v := range is {
 				if err := s.Check(v); err != nil {
-					p.errs = append(p.errs, err)
+					r.errs = append(r.errs, err)
 				}
 			}
 		}
-		p.opts[s.Name] = is
+		r.opts[s.Name] = is
 	case "float":
 		var fs []float64
 		for _, v := range vals {
 			f, err := strconv.ParseFloat(v, 64)
 			if err != nil {
-				p.errs = append(p.errs, fmt.Errorf("'%s' is not a float (arg:%s)", v, s.Name))
+				r.errs = append(r.errs, fmt.Errorf("'%s' is not a float (arg:%s)", v, s.Name))
 				return
 			}
 			fs = append(fs, f)
@@ -165,11 +109,11 @@ func (p *Parser) parse(vals []string, s Param) {
 		} else if s.Check != nil {
 			for _, v := range fs {
 				if err := s.Check(v); err != nil {
-					p.errs = append(p.errs, err)
+					r.errs = append(r.errs, err)
 				}
 			}
 		}
-		p.opts[s.Name] = fs
+		r.opts[s.Name] = fs
 	case "bool":
 		var bs []bool
 		for _, v := range vals {
@@ -178,7 +122,7 @@ func (p *Parser) parse(vals []string, s Param) {
 			if v != "" {
 				b, err = strconv.ParseBool(v)
 				if err != nil {
-					p.errs = append(p.errs, fmt.Errorf("'%s' is not a bool (arg:%s)", v, s.Name))
+					r.errs = append(r.errs, fmt.Errorf("'%s' is not a bool (arg:%s)", v, s.Name))
 					return
 				}
 			}
@@ -187,59 +131,60 @@ func (p *Parser) parse(vals []string, s Param) {
 		if len(bs) == 0 {
 			bs = []bool{s.Default.(bool)}
 		}
-		p.opts[s.Name] = bs
+		r.opts[s.Name] = bs
 	}
 }
 
-func (p *Parser) Parse(r *http.Request) {
-	p.opts = make(map[string]interface{})
-	p.has = make(map[string]bool)
-	p.errs = nil
-	if sfx := r.URL.Path[len(p.path):]; len(sfx) > 1 {
-		p.args = strings.Split(sfx[1:], "/")
+func (p *Parser) Parse(req *http.Request) (r Result) {
+	r.pars = p
+	r.opts = make(map[string]interface{})
+	r.has = make(map[string]bool)
+	if sfx := req.URL.Path[len(p.path):]; len(sfx) > 1 {
+		r.args = strings.Split(sfx[1:], "/")
 	}
 	for i, s := range p.pdef {
-		if !s.verbs.Contains(HttpMethod(r.Method)) {
+		if !s.verbs.Contains(HttpMethod(req.Method)) {
 			continue
 		}
 		var arg []string
-		if i < len(p.args) {
-			arg = []string{p.args[i]}
+		if i < len(r.args) {
+			arg = []string{r.args[i]}
 		}
-		p.parse(arg, s)
+		r.parse(arg, s)
 	}
-	vs, err := args(r)
+	vs, err := args(req)
 	if err != nil {
-		p.errs = append(p.errs, err)
+		r.errs = append(r.errs, err)
 		return
 	}
 	for _, s := range p.qdef {
-		if !s.verbs.Contains(HttpMethod(r.Method)) {
+		if !s.verbs.Contains(HttpMethod(req.Method)) {
 			continue
 		}
-		p.has[s.Name] = vs.Has(s.Name)
+		r.has[s.Name] = vs.Has(s.Name)
 		v := vs[s.Name]
-		p.parse(v, s)
+		r.parse(v, s)
 	}
+	return
 }
 
-func (p Parser) Error() error {
-	if len(p.errs) == 0 {
+func (r Result) Error() error {
+	if len(r.errs) == 0 {
 		return nil
 	}
-	return p.Spec()
+	return r.pars.Spec(r.errs)
 }
 
-func (p Parser) Errs() []error {
-	return p.errs
+func (r Result) Errs() []error {
+	return r.errs
 }
 
-func (p Parser) Has(name string) bool {
-	return p.has[name]
+func (r Result) Has(name string) bool {
+	return r.has[name]
 }
 
-func (p Parser) Strings(name string) []string {
-	switch v := p.opts[name].(type) {
+func (r Result) Strings(name string) []string {
+	switch v := r.opts[name].(type) {
 	case nil:
 		return nil
 	case []string:
@@ -249,16 +194,16 @@ func (p Parser) Strings(name string) []string {
 	}
 }
 
-func (p Parser) String(name string) string {
-	ss := p.Strings(name)
+func (r Result) String(name string) string {
+	ss := r.Strings(name)
 	if len(ss) == 0 {
 		return ""
 	}
 	return ss[0]
 }
 
-func (p Parser) Integers(name string) []int64 {
-	switch v := p.opts[name].(type) {
+func (r Result) Integers(name string) []int64 {
+	switch v := r.opts[name].(type) {
 	case nil:
 		return nil
 	case []int64:
@@ -268,16 +213,16 @@ func (p Parser) Integers(name string) []int64 {
 	}
 }
 
-func (p Parser) Integer(name string) int64 {
-	is := p.Integers(name)
+func (r Result) Integer(name string) int64 {
+	is := r.Integers(name)
 	if len(is) == 0 {
 		return 0
 	}
 	return is[0]
 }
 
-func (p Parser) Floats(name string) []float64 {
-	switch v := p.opts[name].(type) {
+func (r Result) Floats(name string) []float64 {
+	switch v := r.opts[name].(type) {
 	case nil:
 		return nil
 	case []float64:
@@ -287,16 +232,16 @@ func (p Parser) Floats(name string) []float64 {
 	}
 }
 
-func (p Parser) Float(name string) float64 {
-	fs := p.Floats(name)
+func (r Result) Float(name string) float64 {
+	fs := r.Floats(name)
 	if len(fs) == 0 {
 		return 0
 	}
 	return fs[0]
 }
 
-func (p Parser) Bools(name string) []bool {
-	switch v := p.opts[name].(type) {
+func (r Result) Bools(name string) []bool {
+	switch v := r.opts[name].(type) {
 	case nil:
 		return nil
 	case []bool:
@@ -306,8 +251,8 @@ func (p Parser) Bools(name string) []bool {
 	}
 }
 
-func (p Parser) Bool(name string) bool {
-	bs := p.Bools(name)
+func (r Result) Bool(name string) bool {
+	bs := r.Bools(name)
 	if len(bs) == 0 {
 		return false
 	}
@@ -325,15 +270,15 @@ func (p Parser) Routes() []string {
 	return []string{p.path, p.path + "/"}
 }
 
-func (p Parser) Args() int {
-	return len(p.args)
+func (r Result) Args() int {
+	return len(r.args)
 }
 
-func (p Parser) Arg(idx int) string {
-	return p.args[idx]
+func (r Result) Arg(idx int) string {
+	return r.args[idx]
 }
 
-func (p Parser) Spec() Error {
+func (p Parser) Spec(errs []error) Error {
 	var pargs, qargs []string
 	for _, s := range p.pdef {
 		var stub string
@@ -383,7 +328,7 @@ func (p Parser) Spec() Error {
 		return args[i]["name"].(string) < args[j]["name"].(string)
 	})
 	return Error{
-		errs: p.errs,
+		errs: errs,
 		help: p.help,
 		path: uri,
 		args: args,
@@ -395,17 +340,16 @@ func (p Parser) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p Parser) Usage() string {
-	p.errs = nil
-	return p.Spec().Error()
+	return p.Spec(nil).Error()
 }
 
-func (p Parser) ExportAll() map[string]interface{} {
-	return p.opts
+func (r Result) ExportAll() map[string]interface{} {
+	return r.opts
 }
 
-func (p Parser) Export() map[string]interface{} {
+func (r Result) Export() map[string]interface{} {
 	args := make(map[string]interface{})
-	for k, v := range p.opts {
+	for k, v := range r.opts {
 		switch d := v.(type) {
 		case []string:
 			if len(d) > 0 {
