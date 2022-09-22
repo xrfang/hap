@@ -260,6 +260,9 @@ func (r Result) Bool(name string) bool {
 }
 
 func (r Result) Values(name string) []interface{} {
+	if !r.Has(name) {
+		return nil
+	}
 	var vals []interface{}
 	switch vs := r.opts[name].(type) {
 	case []string:
