@@ -259,6 +259,29 @@ func (r Result) Bool(name string) bool {
 	return bs[0]
 }
 
+func (r Result) Values(name string) []interface{} {
+	var vals []interface{}
+	switch vs := r.opts[name].(type) {
+	case []string:
+		for _, v := range vs {
+			vals = append(vals, v)
+		}
+	case []int64:
+		for _, v := range vs {
+			vals = append(vals, v)
+		}
+	case []float64:
+		for _, v := range vs {
+			vals = append(vals, v)
+		}
+	case []bool:
+		for _, v := range vs {
+			vals = append(vals, v)
+		}
+	}
+	return vals
+}
+
 func (p Parser) Purpose() string {
 	return p.help
 }
