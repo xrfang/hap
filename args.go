@@ -6,7 +6,6 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"path"
 )
 
 // parse query string in G-P-C order, i.e. GET (query string) has highest priority,
@@ -17,7 +16,7 @@ func args(r *http.Request) (url.Values, error) {
 		vs[c.Name] = []string{c.Value}
 	}
 	switch r.Method {
-	case http.MethodPost, http.MethodPut, http.MethodPatch:
+	case http.MethodPost, http.MethodPut, http.MethodPatch: //GET、DELETE等方法没有BODY！
 		ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		switch ct {
 		case "application/json":
@@ -54,13 +53,6 @@ func args(r *http.Request) (url.Values, error) {
 	}
 	for k, v := range r.URL.Query() {
 		vs[k] = v
-	}
-	pq, _ := url.ParseQuery(r.URL.Path[1:])
-	for k, v := range pq {
-		k = path.Base(k)
-		if !vs.Has(k) {
-			vs[k] = v
-		}
 	}
 	return vs, nil
 }
