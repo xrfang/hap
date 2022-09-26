@@ -162,9 +162,7 @@ func (p *Parser) Parse(req *http.Request) (r Result) {
 			continue
 		}
 		r.has[s.Name] = vs.Has(s.Name)
-		if r.has[s.Name] {
-			r.parse(vs[s.Name], s)
-		}
+		r.parse(vs[s.Name], s)
 	}
 	return
 }
