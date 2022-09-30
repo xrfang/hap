@@ -30,6 +30,9 @@ func (w *gzipResponseWriter) WriteHeader(status int) {
 }
 
 func (w *gzipResponseWriter) Write(b []byte) (int, error) {
+	if len(b) == 0 {
+		return w.ResponseWriter.Write(nil) //detect http.ErrHijacked
+	}
 	return w.Writer.Write(b)
 }
 
