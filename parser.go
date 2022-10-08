@@ -16,6 +16,7 @@ type (
 	}
 	Validator func(interface{}) error
 	Handler   interface {
+		Ready() bool
 		Routes() []string
 		Purpose() string
 		http.Handler
@@ -32,6 +33,7 @@ type (
 		verbs    HttpMethods
 	}
 	Parser struct {
+		init bool
 		qdef []Param //query parameters
 		pdef []Param //positional (path) parameters
 		help string
@@ -494,12 +496,20 @@ func (p *Parser) Init(route string, spec []Param) error {
 	if strings.HasSuffix(p.path, "/") {
 		p.path = route[:len(p.path)-1]
 	}
+	p.init = true
 	return nil
+}
+
+func (p Parser) Ready() bool {
+	return p.init
 }
 
 var handlers map[string]string
 
 func Register(h Handler, mx ...*http.ServeMux) {
+	if !h.Ready() {
+		panic(fmt.Errorf("hap: handler %T not initialized", h))
+	}
 	if len(mx) == 0 {
 		mx = []*http.ServeMux{http.DefaultServeMux}
 	}
