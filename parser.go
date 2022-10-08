@@ -1,6 +1,7 @@
 package hap
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"path"
@@ -23,7 +24,7 @@ type (
 	}
 	Param struct {
 		Name     string
-		Type     string //string, int, float, bool
+		Type     string //string, int, float, bool, blob
 		Default  interface{}
 		Required bool
 		Check    Validator
@@ -67,6 +68,28 @@ func (r *Result) parse(vals []string, s Param) {
 			}
 			r.opts[s.Name] = vals
 		}
+	case "blob":
+		var bss [][]byte
+		for i, v := range vals {
+			bs, err := base64.StdEncoding.DecodeString(v)
+			if err != nil {
+				r.errs = append(r.errs, fmt.Errorf("value #%d for %s is not a valid BASE64 string", i, s.Name))
+				return
+			}
+			bss = append(bss, bs)
+		}
+		if len(bss) == 0 {
+			bss = [][]byte{s.Default.([]byte)}
+		} else {
+			if s.Check != nil {
+				for _, v := range bss {
+					if err := s.Check(v); err != nil {
+						r.errs = append(r.errs, err)
+					}
+				}
+			}
+		}
+		r.opts[s.Name] = bss
 	case "int":
 		var is []int64
 		var base int
@@ -260,6 +283,25 @@ func (r Result) Bool(name string) bool {
 	return bs[0]
 }
 
+func (r Result) Blobs(name string) [][]byte {
+	switch v := r.opts[name].(type) {
+	case nil:
+		return nil
+	case [][]byte:
+		return v
+	default:
+		panic(fmt.Errorf("parameter '%s' is %T, not []byte", name, v))
+	}
+}
+
+func (r Result) Blob(name string) []byte {
+	bs := r.Blobs(name)
+	if len(bs) == 0 {
+		return []byte{}
+	}
+	return bs[0]
+}
+
 func (r Result) Values(name string) []interface{} {
 	if !r.Has(name) {
 		return nil
@@ -433,6 +475,15 @@ func (p *Parser) Init(route string, spec []Param) error {
 				return fmt.Errorf("default value of '%s' must be string (given: %T)", s.Name, s.Default)
 			}
 			t = "string"
+		case "blob":
+			switch r := s.Default.(type) {
+			case []byte:
+				v = r
+			case nil:
+				v = []byte{}
+			default:
+				return fmt.Errorf("default value of '%s' must be []byte (given: %T)", s.Name, s.Default)
+			}
 		case "int":
 			switch i := s.Default.(type) {
 			case int64:
