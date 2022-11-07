@@ -3,6 +3,7 @@ package hap
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
@@ -23,7 +24,10 @@ func args(r *http.Request) (url.Values, error) {
 			var kv map[string]interface{}
 			err := json.NewDecoder(r.Body).Decode(&kv)
 			if err != nil {
-				return nil, err
+				if err != io.EOF {
+					return nil, err
+				}
+				kv = make(map[string]interface{})
 			}
 			for k, v := range kv {
 				switch v := v.(type) {
