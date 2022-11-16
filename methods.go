@@ -7,7 +7,7 @@ const (
 	hmPOST
 	hmDELETE
 	hmHEAD
-	hmOPTION
+	hmOPTIONS
 	hmPUT
 	hmPATCH
 	hmCONNECT
@@ -29,8 +29,8 @@ func (hm HttpMethod) Value() uint16 {
 		return hmDELETE
 	case "HEAD":
 		return hmHEAD
-	case "OPTION":
-		return hmOPTION
+	case "OPTIONS":
+		return hmOPTIONS
 	case "PUT":
 		return hmPUT
 	case "PATCH":
