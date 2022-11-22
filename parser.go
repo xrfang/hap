@@ -73,8 +73,11 @@ func (r *Result) parse(vals []string, s Param) {
 		for i, v := range vals {
 			bs, err := base64.StdEncoding.DecodeString(v)
 			if err != nil {
-				r.errs = append(r.errs, fmt.Errorf("value #%d for %s is not a valid BASE64 string", i, s.Name))
-				return
+				if v != "" {
+					r.errs = append(r.errs, fmt.Errorf("value #%d for %s is not a valid BASE64 string", i, s.Name))
+					return
+				}
+				bs = s.Default.([]byte)
 			}
 			bss = append(bss, bs)
 		}
@@ -104,8 +107,11 @@ func (r *Result) parse(vals []string, s Param) {
 			}
 			i, err := strconv.ParseInt(v, base, 64)
 			if err != nil {
-				r.errs = append(r.errs, fmt.Errorf("'%s' is not an integer (arg:%s)", v, s.Name))
-				return
+				if v != "" {
+					r.errs = append(r.errs, fmt.Errorf("'%s' is not an integer (arg:%s)", v, s.Name))
+					return
+				}
+				i = s.Default.(int64)
 			}
 			is = append(is, int64(i))
 		}
@@ -124,8 +130,11 @@ func (r *Result) parse(vals []string, s Param) {
 		for _, v := range vals {
 			f, err := strconv.ParseFloat(v, 64)
 			if err != nil {
-				r.errs = append(r.errs, fmt.Errorf("'%s' is not a float (arg:%s)", v, s.Name))
-				return
+				if v != "" {
+					r.errs = append(r.errs, fmt.Errorf("'%s' is not a float (arg:%s)", v, s.Name))
+					return
+				}
+				f = s.Default.(float64)
 			}
 			fs = append(fs, f)
 		}
