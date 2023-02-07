@@ -45,7 +45,7 @@ func args(r *http.Request) (url.Values, error) {
 				return nil, err
 			}
 			fallthrough
-		default:
+		case "application/x-www-form-urlencoded":
 			err := r.ParseForm()
 			if err != nil {
 				return nil, err
@@ -53,6 +53,8 @@ func args(r *http.Request) (url.Values, error) {
 			for k, v := range r.Form {
 				vs[k] = v
 			}
+		default:
+			return nil, fmt.Errorf("invalid content-type '%s'", ct)
 		}
 	}
 	for k, v := range r.URL.Query() {
